@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Quicksand:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Quicksand", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fredoka", "Quicksand", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Brand Palette Colors */
+  --color-ttp-coral: #eb5053;
+  --color-ttp-yellow: #f4da53;
+  --color-ttp-blue: #0B4283;
+  --color-ttp-grey: #E6E2DA;
+  --color-ttp-brown: #32271E;
+  --color-ttp-beige: #CCC5B5;
+  --color-ttp-green: #007F61;
+  --color-ttp-pink: #BA3A87;
+}
+
+/* Custom animated background pulse styling for SMS bubble alerts & modern shadows */
+@keyframes ringPulse {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+  100% { transform: scale(0.95); opacity: 0.5; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Customize mobile scrollbars for realistic rendering inside simulating views */
+.phone-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.phone-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.phone-scroll::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 2px;
+}
+.phone-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
