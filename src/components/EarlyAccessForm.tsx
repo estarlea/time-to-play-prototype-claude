@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle2, Sparkles, ExternalLink, ArrowRight, ShieldCheck } from "lucide-react";
 import { submitToGoogleForm } from "../lib/googleForm";
+import posthog from "posthog-js";
 
 // A beautiful, highly custom-vibrant vector of a playground slide logo, adhering to brand identity
 const PlaydateKidsLogo = () => (
@@ -97,6 +98,16 @@ export default function EarlyAccessForm({
         `Registered early access subscriber: ${formData.firstName} ${formData.lastName} (${formData.email}). Saved to Google Sheet.`
       );
 
+      // Link this session to the person in PostHog
+      posthog.identify(formData.email, {
+        name: `${formData.firstName} ${formData.lastName}`,
+        phone: formData.phone,
+      });
+      posthog.capture("early_access_signup", {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+      });
       setIsSubmitted(true);
     } catch (err: any) {
       setErrorMsg("Unable to register at this time. Please try again.");
