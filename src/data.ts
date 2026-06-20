@@ -309,4 +309,11 @@ export function calculateMutualOverlapProposal(
   const proposal: ProposalState = {
     id: `p-${Date.now()}`,
     dayText: day.split(" (")[0],
-    dateText: day.includes("(") ? day.split(" (")[1].replace
+    dateText: day.includes("(") ? day.split(" (")[1].replace(")", "") : "TBD",
+    timeText: time,
+    locationText: guestSelectedLocation || `${audraPrefs.childName || "Emma"}'s place`,
+    slotIdUsed: finalSlot
+  };
+
+  return { proposal, log: logs };
+}
