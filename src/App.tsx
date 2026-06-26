@@ -4,98 +4,39 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { 
-  PlaydatePreferences, 
-  OtherParent, 
-  ProposalState, 
-  SimulatedStep, 
-  SystemAuditLog 
-} from "./types";
-import { 
-  DEFAULT_AUDRA_PREFERENCES, 
-  DEFAULT_WHITNEY_PARENT 
-} from "./data";
+import { PlaydatePreferences, OtherParent, ProposalState, SimulatedStep, SystemAuditLog } from "./types";
+import { DEFAULT_AUDRA_PREFERENCES, DEFAULT_WHITNEY_PARENT } from "./data";
 import AudraApp from "./components/AudraApp";
-import WhitneySMS from "./components/WhitneySMS";
-import EarlyAccessForm from "./components/EarlyAccessForm";
-// Lead capture now goes to Google Form (see src/lib/googleForm.ts)
+import AuthScreen from "./components/AuthScreen";
+import posthog from "posthog-js";
 
 export default function App() {
-  // Central Coordinate States
   const [preferences, setPreferences] = useState<PlaydatePreferences>(DEFAULT_AUDRA_PREFERENCES);
   const [whitneyParent, setWhitneyParent] = useState<OtherParent>(DEFAULT_WHITNEY_PARENT);
   const [currentStep, setCurrentStep] = useState<SimulatedStep>("audra_onboarding");
   const [activeProposal, setActiveProposal] = useState<ProposalState | null>(null);
   const [auditLogs, setAuditLogs] = useState<SystemAuditLog[]>([]);
+  const [clickedButtons, setClickedButtons] = useState<Record<string, boolean>>({});
+  const [showAuthGate, setShowAuthGate] = useState(false);
 
-  // Synchronous Refs to prevent out-of-order/stale React state syncs
   const preferencesRef = React.useRef(preferences);
-  const whitneyParentRef = React.useRef(whitneyParent);
   const currentStepRef = React.useRef(currentStep);
   const activeProposalRef = React.useRef(activeProposal);
   const clickedButtonsRef = React.useRef<Record<string, boolean>>({});
 
-  React.useEffect(() => {
-    preferencesRef.current = preferences;
-  }, [preferences]);
-
-  React.useEffect(() => {
-    whitneyParentRef.current = whitneyParent;
-  }, [whitneyParent]);
-
-  React.useEffect(() => {
-    currentStepRef.current = currentStep;
-  }, [currentStep]);
-
-  React.useEffect(() => {
-    activeProposalRef.current = activeProposal;
-  }, [activeProposal]);
-
-  const [clickedButtons, setClickedButtons] = useState<Record<string, boolean>>({});
-  const [showEarlyAccessForm, setShowEarlyAccessForm] = useState(false);
-
-  React.useEffect(() => {
-    clickedButtonsRef.current = clickedButtons;
-  }, [clickedButtons]);
+  React.useEffect(() => { preferencesRef.current = preferences; }, [preferences]);
+  React.useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
+  React.useEffect(() => { activeProposalRef.current = activeProposal; }, [activeProposal]);
+  React.useEffect(() => { clickedButtonsRef.current = clickedButtons; }, [clickedButtons]);
 
   const trackClick = (buttonId: string) => {
-    setClickedButtons((prev) => ({
-      ...prev,
-      [buttonId]: true
-    }));
+    setClickedButtons(prev => ({ ...prev, [buttonId]: true }));
   };
 
-  // Helper: Central Event Logger with exact format
   const addAuditLog = (event: string, category: "AI" | "CALENDAR" | "SMS" | "SYSTEM", description: string) => {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const newLog: SystemAuditLog = {
-      timestamp: timeStr,
-      event,
-      category,
-      description
-    };
-    setAuditLogs((prev) => [newLog, ...prev]);
-  };
-
-  // Triggered when Audra approves proposal. TTP pushes Whitney to first active receiver view
-  const triggerSmsFlow = (proposal: ProposalState) => {
-    setCurrentStep("whitney_sms_received");
-    addAuditLog(
-      `Triggered SMS Sequence`, 
-      "SMS", 
-      `AI Proposal approved by Audra. Dispatched SMS schedule message to ${whitneyParent.name || "Whitney"} at ${whitneyParent.phone}.`
-    );
-  };
-
-  // Complete match calculation, mutual lock calendar invites issued
-  const handleLockedConfirmation = () => {
-    setCurrentStep("playdate_fully_locked");
-    addAuditLog(
-      `Schedules Synchronized!`, 
-      "CALENDAR", 
-      `Google Calendar invite fully authorized and synchronized. Playdate confirmed between Emma & Lily!`
-    );
+    const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setAuditLogs(prev => [{ timestamp: timeStr, event, category, description }, ...prev]);
   };
 
   const handleReset = () => {
@@ -105,64 +46,66 @@ export default function App() {
     setActiveProposal(null);
     setAuditLogs([]);
     setClickedButtons({});
-    trackClick("Button_Reset_Simulation");
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setAuditLogs([
-      {
-        timestamp: timeStr,
-        event: "Simulator Restored",
-        category: "SYSTEM",
-        description: "Sandbox reset. Default onboarding properties and Whitney preferences reloaded."
-      },
-      {
-        timestamp: timeStr,
-        event: "Time to Play Active",
-        category: "SYSTEM",
-        description: "Prototype successfully initialized. Loaded pilot demographics (Front Range, CO)."
-      }
-    ]);
+    setShowAuthGate(false);
   };
 
-
-  // On initial mount, pre-seed welcoming logs
   useEffect(() => {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setAuditLogs([
-      {
-        timestamp: timeStr,
-        event: "Time to Play Active",
-        category: "SYSTEM",
-        description: "Prototype successfully initialized. Loaded pilot demographics (Front Range, CO)."
-      }
-    ]);
+    const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setAuditLogs([{
+      timestamp: timeStr,
+      event: "Time to Play Active",
+      category: "SYSTEM",
+      description: "App initialized. Ready to plan your next playdate!"
+    }]);
   }, []);
 
-  const isWhitneyActive = currentStep.startsWith("whitney");
+  // Called after successful Firebase Auth — open native share sheet
+  const handleAuthSuccess = async () => {
+    setShowAuthGate(false);
+    posthog.capture("account_created_and_shared");
+
+    const proposal = activeProposalRef.current;
+    const prefs = preferencesRef.current;
+    const childName = prefs.childName || "my child";
+    const day = proposal?.dayText || "";
+    const date = proposal?.dateText || "";
+    const time = proposal?.timeText || "";
+
+    const shareText = `Hey! I just used Time to Play to find us the perfect playdate time. How about ${day}, ${date} at ${time}? Let me know if that works! 🎉`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Playdate for ${childName}!`,
+          text: shareText,
+        });
+        posthog.capture("share_sheet_opened");
+        addAuditLog("Invite Shared", "SMS", `Native share sheet opened for ${childName}'s playdate on ${day}, ${date} at ${time}.`);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          console.error("Share failed:", err);
+        }
+      }
+    } else {
+      // Fallback: copy to clipboard
+      await navigator.clipboard.writeText(shareText);
+      addAuditLog("Invite Copied", "SMS", "Share text copied to clipboard (share API not available).");
+      alert("Message copied to clipboard! Paste it into a text to your friend.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-start antialiased font-sans">
       <div className="w-full max-w-md min-h-screen flex flex-col bg-white md:shadow-2xl md:border-x border-stone-150/40 relative">
-        {showEarlyAccessForm ? (
-          <EarlyAccessForm
-            isOpen={showEarlyAccessForm}
-            onClose={() => setShowEarlyAccessForm(false)}
-            addAuditLog={addAuditLog}
-            parentPreferences={preferences}
-            onExplorePrototypeMore={() => {
-              setShowEarlyAccessForm(false);
-              // advance the prototype experience to Whitney's side
-              if (activeProposal) {
-                triggerSmsFlow(activeProposal);
-              } else {
-                // Safe default fallback step
-                setCurrentStep("whitney_sms_received");
-              }
-            }}
+        {showAuthGate ? (
+          <AuthScreen
+            preferences={preferences}
+            activeProposal={activeProposal}
+            onSuccess={handleAuthSuccess}
+            onClose={() => setShowAuthGate(false)}
           />
-        ) : !isWhitneyActive ? (
+        ) : (
           <AudraApp
             preferences={preferences}
             setPreferences={setPreferences}
@@ -173,25 +116,10 @@ export default function App() {
             activeProposal={activeProposal}
             setActiveProposal={setActiveProposal}
             addAuditLog={addAuditLog}
-            triggerSmsFlow={triggerSmsFlow}
+            triggerSmsFlow={() => {}}
             resetSimulation={handleReset}
             trackClick={trackClick}
-            onTriggerEarlyAccess={() => setShowEarlyAccessForm(true)}
-          />
-        ) : (
-          <WhitneySMS
-            activeProposal={activeProposal}
-            setActiveProposal={setActiveProposal}
-            whitneyParent={whitneyParent}
-            setWhitneyParent={setWhitneyParent}
-            audraPrefs={preferences}
-            currentStep={currentStep}
-            setCurrentStep={setCurrentStep}
-            addAuditLog={addAuditLog}
-            setFinishedStep={() => {}}
-            onFullyLocked={handleLockedConfirmation}
-            trackClick={trackClick}
-            resetSimulation={handleReset}
+            onTriggerEarlyAccess={() => setShowAuthGate(true)}
           />
         )}
       </div>
